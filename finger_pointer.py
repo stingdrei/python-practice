@@ -19,9 +19,9 @@ import os
 import numpy as np
 from PIL import Image
 
-MONKEY_IMAGE_PATH  = "monkey.jpeg"
-MONKEY2_IMAGE_PATH = "monkey2.jpeg"
-NUBNUB_GIF_PATH    = "nub-nub-cat.gif"
+MONKEY_IMAGE_PATH  = "assets/monkey.jpeg"
+MONKEY2_IMAGE_PATH = "assets/monkey2.jpeg"
+NUBNUB_GIF_PATH    = "assets/nub-nub-cat.gif"
 
 
 # ══════════════════════════════════════════════
