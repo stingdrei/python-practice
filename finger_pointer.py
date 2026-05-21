@@ -297,14 +297,6 @@ def main():
                     if is_left_four_no_thumb(extended, handedness, back_facing):
                         show_nubnub = True
 
-                    # Skeleton
-                    mp_draw.draw_landmarks(
-                        frame, hand_lm,
-                        mp_hands.HAND_CONNECTIONS,
-                        mp_draw_style.get_default_hand_landmarks_style(),
-                        mp_draw_style.get_default_hand_connections_style(),
-                    )
-
             # ── FPS ───────────────────────────────────────────
             draw_fps(frame, fps)
 
