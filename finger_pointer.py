@@ -236,9 +236,9 @@ def main():
         print("=" * 55)
         print("  Finger Counter   |  Q/ESC → quit   S → screenshot")
         print("  Gestures:")
-        print("    Left index only            → monkey.jpeg")
-        print("    Left 4 fingers + backface  → nub-nub-cat.gif")
-        print("    Right index → lips         → monkey2.jpeg")
+        print("    Left index only                  → monkey.jpeg")
+        print("    Left 4 fingers + backface        → nub-nub-cat.gif")
+        print("    Right index → lips + backface    → monkey2.jpeg")
         print("=" * 55)
 
         while True:
@@ -285,13 +285,15 @@ def main():
                         total_fingers += count
 
                     if back_facing:
-                        pass
-                    else:
-                        if is_left_index_only(extended, handedness):
-                            show_monkey = True
+                        # Right index pointing at lips, palm facing away → monkey2
                         if is_right_index_at_lips(hand_lm, handedness, face_lm, w, h):
                             show_monkey2 = True
+                    else:
+                        # Left index only, palm facing camera → monkey
+                        if is_left_index_only(extended, handedness):
+                            show_monkey = True
 
+                    # Left 4 fingers (no thumb) + back-facing → nub-nub cat
                     if is_left_four_no_thumb(extended, handedness, back_facing):
                         show_nubnub = True
 
@@ -319,11 +321,11 @@ def main():
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.9,
                                 (0, 100, 255), 2, cv2.LINE_AA)
 
-            # ── Monkey2 overlay (left side) — right index → lips
+            # ── Monkey2 overlay — right index → lips + back-facing
             if show_monkey2:
                 if monkey2_img is not None:
                     mh, mw = monkey2_img.shape[:2]
-                    mx = 20
+                    mx = w - mw - 20
                     my = (h - mh) // 2
                     overlay_image(frame, monkey2_img, mx, my)
                 else:
@@ -340,7 +342,7 @@ def main():
                         gif_last_tick = now
                     gframe = nubnub_frames[gif_frame_idx]
                     gh, gw = gframe.shape[:2]
-                    gx = (w - gw) // 2
+                    gx = w - gw - 4
                     gy = (h - gh) // 2
                     overlay_image(frame, gframe, gx, gy)
                 else:
