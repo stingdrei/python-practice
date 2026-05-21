@@ -20,6 +20,7 @@ import numpy as np
 from PIL import Image
 
 MONKEY_IMAGE_PATH  = "monkey.jpeg"
+MONKEY2_IMAGE_PATH = "monkey2.jpeg"
 NUBNUB_GIF_PATH    = "nub-nub-cat.gif"
 
 
@@ -114,10 +115,49 @@ def is_left_four_no_thumb(extended: list, handedness: str, back_facing: bool = F
     return extended[0] and all(extended[i] for i in [1, 2, 3, 4])
 
 
+def is_right_index_at_lips(hand_landmarks, handedness: str,
+                            face_landmarks, frame_w: int, frame_h: int) -> bool:
+    """
+    Returns True when the RIGHT hand index fingertip (lm[8]) is close
+    to the mouth/lips region of the detected face.
+
+    Lips region is estimated from face mesh landmarks:
+      - Upper lip top center : lm[13]
+      - Lower lip bottom center: lm[14]
+      - Left mouth corner : lm[61]
+      - Right mouth corner: lm[291]
+    We expand the bounding box by a padding factor so the trigger
+    isn't pixel-perfect.
+    """
+    if handedness != "Right":
+        return False
+    if face_landmarks is None:
+        return False
+
+    # Index fingertip in pixel coords
+    tip = hand_landmarks.landmark[8]
+    tx  = int(tip.x * frame_w)
+    ty  = int(tip.y * frame_h)
+
+    # Lips bounding box from face mesh
+    lip_ids = [13, 14, 61, 291, 78, 308, 402, 182]
+    xs = [int(face_landmarks.landmark[i].x * frame_w) for i in lip_ids]
+    ys = [int(face_landmarks.landmark[i].y * frame_h) for i in lip_ids]
+
+    pad    = 40   # pixel padding around lips region
+    lip_x1 = min(xs) - pad
+    lip_x2 = max(xs) + pad
+    lip_y1 = min(ys) - pad
+    lip_y2 = max(ys) + pad
+
+    return lip_x1 <= tx <= lip_x2 and lip_y1 <= ty <= lip_y2
+
+
 # ══════════════════════════════════════════════
 #  MediaPipe setup
 # ══════════════════════════════════════════════
 mp_hands      = mp.solutions.hands
+mp_face_mesh  = mp.solutions.face_mesh
 mp_draw       = mp.solutions.drawing_utils
 mp_draw_style = mp.solutions.drawing_styles
 
@@ -125,14 +165,9 @@ FINGER_TIPS  = [4,  8,  12, 16, 20]
 FINGER_PIPS  = [3,  6,  10, 14, 18]
 FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
 
-COLOR_BOX      = (30,  30,  30)
-COLOR_LABEL_BG = (50,  50,  50)
-COLOR_EXTENDED = (0,  220, 120)
-COLOR_BENT     = (0,   80, 220)
-COLOR_TITLE    = (255, 220,  50)
-COLOR_WHITE    = (255, 255, 255)
-COLOR_COUNT    = (0,  220, 120)
-COLOR_ZERO     = (0,   80, 220)
+COLOR_WHITE  = (255, 255, 255)
+COLOR_COUNT  = (0,  220, 120)
+COLOR_ZERO   = (0,   80, 220)
 
 
 # ══════════════════════════════════════════════
@@ -154,35 +189,6 @@ def count_fingers(hand_landmarks, handedness_label: str):
 # ══════════════════════════════════════════════
 #  Drawing helpers
 # ══════════════════════════════════════════════
-
-def draw_finger_status(frame, extended, origin, hand_label: str, back_facing: bool = False):
-    x, y  = origin
-    box_w = 160
-    box_h = 30
-    for i, (name, up) in enumerate(zip(FINGER_NAMES, extended)):
-        fy = y + i * (box_h + 4)
-        # Only thumb flips when back_facing
-        display_up = (not up) if (back_facing and i == 0) else up
-        color  = COLOR_EXTENDED if display_up else COLOR_BENT
-        status = "UP  " if display_up else "DOWN"
-        cv2.rectangle(frame, (x, fy), (x + box_w, fy + box_h), COLOR_BOX, -1)
-        cv2.rectangle(frame, (x, fy), (x + box_w, fy + box_h), color, 1)
-        cv2.putText(frame, f"{name}: {status}",
-                    (x + 8, fy + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.52,
-                    color, 1, cv2.LINE_AA)
-
-
-def draw_count_badge(frame, count: int, cx: int, cy: int):
-    radius = 36
-    cv2.circle(frame, (cx, cy), radius + 3, (0, 0, 0), -1)
-    cv2.circle(frame, (cx, cy), radius,
-               COLOR_COUNT if count > 0 else COLOR_ZERO, -1)
-    label = str(count)
-    fs    = 1.3 if count < 10 else 0.9
-    (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, fs, 2)
-    cv2.putText(frame, label, (cx - tw // 2, cy + th // 2),
-                cv2.FONT_HERSHEY_SIMPLEX, fs, (10, 10, 10), 2, cv2.LINE_AA)
-
 
 def draw_fps(frame, fps: float):
     cv2.putText(frame, f"FPS: {fps:.1f}",
@@ -207,7 +213,8 @@ def main():
     screenshot_dir = "screenshots"
 
     # Load assets once
-    monkey_img      = load_static_image(MONKEY_IMAGE_PATH, (280, 280))
+    monkey_img      = load_static_image(MONKEY_IMAGE_PATH,  (280, 280))
+    monkey2_img     = load_static_image(MONKEY2_IMAGE_PATH, (280, 280))
     nubnub_frames   = load_gif_frames(NUBNUB_GIF_PATH, (280, 280))
 
     gif_frame_idx   = 0
@@ -219,10 +226,19 @@ def main():
         max_num_hands=2,
         min_detection_confidence=0.7,
         min_tracking_confidence=0.6,
-    ) as hands:
+    ) as hands, mp_face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=1,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    ) as face_mesh:
 
         print("=" * 55)
         print("  Finger Counter   |  Q/ESC → quit   S → screenshot")
+        print("  Gestures:")
+        print("    Left index only            → monkey.jpeg")
+        print("    Left 4 fingers + backface  → nub-nub-cat.gif")
+        print("    Right index → lips         → monkey2.jpeg")
         print("=" * 55)
 
         while True:
@@ -234,23 +250,32 @@ def main():
             frame = cv2.flip(frame, 1)
             h, w  = frame.shape[:2]
             rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = hands.process(rgb)
+
+            # Process hands and face mesh
+            hand_results = hands.process(rgb)
+            face_results = face_mesh.process(rgb)
 
             now       = time.time()
             fps       = 1.0 / max(now - prev_time, 1e-6)
             prev_time = now
 
+            # Get first detected face (if any)
+            face_lm = None
+            if face_results.multi_face_landmarks:
+                face_lm = face_results.multi_face_landmarks[0]
+
             total_fingers = 0
             num_hands     = 0
             show_monkey   = False
+            show_monkey2  = False
             show_nubnub   = False
 
-            if results.multi_hand_landmarks:
-                num_hands = len(results.multi_hand_landmarks)
+            if hand_results.multi_hand_landmarks:
+                num_hands = len(hand_results.multi_hand_landmarks)
 
                 for idx, (hand_lm, hand_info) in enumerate(
-                    zip(results.multi_hand_landmarks,
-                        results.multi_handedness)
+                    zip(hand_results.multi_hand_landmarks,
+                        hand_results.multi_handedness)
                 ):
                     handedness  = hand_info.classification[0].label
                     back_facing = is_palm_facing_away(hand_lm, handedness)
@@ -260,10 +285,13 @@ def main():
                         total_fingers += count
 
                     if back_facing:
-                        pass  # no label
+                        pass
                     else:
                         if is_left_index_only(extended, handedness):
                             show_monkey = True
+                        if is_right_index_at_lips(hand_lm, handedness, face_lm, w, h):
+                            show_monkey2 = True
+
                     if is_left_four_no_thumb(extended, handedness, back_facing):
                         show_nubnub = True
 
@@ -275,9 +303,7 @@ def main():
                         mp_draw_style.get_default_hand_connections_style(),
                     )
 
-
-
-            # ── FPS only ─────────────────────────────────────
+            # ── FPS ───────────────────────────────────────────
             draw_fps(frame, fps)
 
             # ── Monkey overlay (right side) ───────────────────
@@ -293,6 +319,19 @@ def main():
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.9,
                                 (0, 100, 255), 2, cv2.LINE_AA)
 
+            # ── Monkey2 overlay (left side) — right index → lips
+            if show_monkey2:
+                if monkey2_img is not None:
+                    mh, mw = monkey2_img.shape[:2]
+                    mx = 20
+                    my = (h - mh) // 2
+                    overlay_image(frame, monkey2_img, mx, my)
+                else:
+                    cv2.putText(frame, "monkey2.jpeg not found!",
+                                (w // 2 - 160, h // 2 + 40),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.9,
+                                (0, 100, 255), 2, cv2.LINE_AA)
+
             # ── Nub-Nub Cat GIF overlay (center, triggered) ──
             if show_nubnub:
                 if nubnub_frames:
@@ -301,7 +340,7 @@ def main():
                         gif_last_tick = now
                     gframe = nubnub_frames[gif_frame_idx]
                     gh, gw = gframe.shape[:2]
-                    gx = (w - gw - 4)
+                    gx = (w - gw) // 2
                     gy = (h - gh) // 2
                     overlay_image(frame, gframe, gx, gy)
                 else:
