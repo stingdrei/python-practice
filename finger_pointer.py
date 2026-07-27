@@ -431,7 +431,7 @@ def main():
     last_diag       = {"lw_x": None, "rw_x": None,
                        "ls_x": None, "rs_x": None,
                        "step_a": False, "step_b": False, "cycles": 0}
-
+    
     with mp_hands.Hands(
         static_image_mode=False,
         max_num_hands=2,

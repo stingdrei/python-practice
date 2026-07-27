@@ -1,0 +1,4 @@
+;!function(){try { var e="undefined"!=typeof globalThis?globalThis:"undefined"!=typeof global?global:"undefined"!=typeof window?window:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&((e._debugIds|| (e._debugIds={}))[n]="93cd3620-c4d9-441b-e18d-22043a3b96a7")}catch(e){}}();
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,302926,e=>{"use strict";var t=e.i(630441),i=e.i(406968),c=e.i(361637);e.s(["ClientRedirect",0,function(e){let o,r,u=(0,t.c)(5),{path:l,fullReload:n}=e,s=(0,i.useRouter)();return u[0]!==n||u[1]!==l||u[2]!==s?(o=()=>{n?window.location.href=l:s.replace(l)},r=[n,l,s],u[0]=n,u[1]=l,u[2]=s,u[3]=o,u[4]=r):(o=u[3],r=u[4]),(0,c.useEffect)(o,r),null}])}]);
+
+//# debugId=93cd3620-c4d9-441b-e18d-22043a3b96a7
